@@ -20,6 +20,37 @@ function parseSchedule(text) {
     return { time, task, tip };
   }).filter(item => item.time && item.task);
 }
+function requestNotificationPermission() {
+  if ("Notification" in window) {
+    Notification.requestPermission();
+  }
+}
+
+function scheduleNotifications(scheduleItems) {
+  if (!("Notification" in window) || Notification.permission !== "granted") return;
+
+  scheduleItems.forEach(item => {
+    const timeStr = item.time.split("-")[0].trim();
+    const [time, period] = timeStr.split(" ");
+    let [hours, minutes] = time.split(":").map(Number);
+    if (period === "PM" && hours !== 12) hours += 12;
+    if (period === "AM" && hours === 12) hours = 0;
+
+    const now = new Date();
+    const taskTime = new Date();
+    taskTime.setHours(hours, minutes, 0, 0);
+
+    const diff = taskTime - now;
+    if (diff > 0) {
+      setTimeout(() => {
+        new Notification("⚡ Zenit Reminder", {
+          body: `Time to start: ${item.task}`,
+          icon: "/favicon.ico",
+        });
+      }, diff);
+    }
+  });
+}
 
 function Intro({ onDone }) {
   const canvasRef = useRef(null);
@@ -161,6 +192,7 @@ export default function App() {
     if (!tasks.trim()) return;
     setLoading(true);
     setSchedule([]);
+    
     setActiveHistory(null);
     try {
         const response = await fetch("https://zenit-backend-ii36.onrender.com/schedule", {
@@ -172,6 +204,8 @@ export default function App() {
       const parsed = parseSchedule(data.schedule);
       setSchedule(parsed);
       setRawSchedule(data.schedule);
+      requestNotificationPermission();
+      scheduleNotifications(parsed);
       const newEntry = { id: Date.now(), date: new Date().toLocaleDateString(), tasks, mood, schedule: parsed, raw: data.schedule };
       const newHistory = [newEntry, ...history].slice(0, 5);
       setHistory(newHistory);
@@ -266,6 +300,9 @@ export default function App() {
 
         {displaySchedule.length > 0 && (
           <div className="card">
+            <div className="notif-banner">
+  🔔 Notifications are enabled — Zenit will remind you before each task!
+</div>
             <div className="result-header">
               <h2>Your Schedule</h2>
               <div className="result-actions">
